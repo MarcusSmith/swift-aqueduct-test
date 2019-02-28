@@ -9,6 +9,7 @@ import Foundation
 
 public protocol RequestChannel {
     func prepare(completion: (Error?) -> Void)
+    func handleRequest(request: Request)
 }
 
 public extension RequestChannel {

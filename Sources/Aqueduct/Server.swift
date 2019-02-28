@@ -19,7 +19,7 @@ public class Server {
         static let hostUsage: String? = nil
         static let portUsage: String? = nil
         static let channelCountUsage: String? = nil
-        static let defaultHost = "::1"
+        static let defaultHost = "0.0.0.0"
         static let defaultPort = 8080
         static let defaultChannelCount = System.coreCount
         
@@ -55,7 +55,7 @@ public class Server {
             .serverChannelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: 1)
             
             .childChannelInitializer { channel in
-                channel.pipeline.add(handler: BackPressureHandler())
+                channel.pipeline.configureHTTPServerPipeline(withErrorHandling: true)
                     .then { (_) -> EventLoopFuture<RequestChannel> in
                         let requestChannel = channelInitializer()
                         let promise = channel.eventLoop.newPromise(of: RequestChannel.self)
