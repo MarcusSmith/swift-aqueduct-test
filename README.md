@@ -1,2 +1,2 @@
 # swift-aqueduct-test
-An excuse to mess around with Swift NIO and Codable
+An experiment with Swift NIO & Codable, to try to replicate [Aqueduct](https://github.com/stablekernel/aqueduct) in Swift, not intended for actual production use
