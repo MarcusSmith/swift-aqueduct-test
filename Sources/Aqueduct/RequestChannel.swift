@@ -6,14 +6,24 @@
 //
 
 import Foundation
+import Promises
 
 public protocol RequestChannel {
-    func prepare(completion: (Error?) -> Void)
-    func handleRequest(request: Request)
+    func prepare() -> Promise<Void>
+    func transform(_ error: Error) -> Response
+    var entryPoint: Controller { get }
 }
 
 public extension RequestChannel {
-    func prepare(completion: (Error?) -> Void) {
-        completion(nil)
+    func prepare() -> Promise<Void> {
+        return Promise(())
+    }
+    
+    func transform(_ error: Error) -> Response {
+        if let statusError = error as? StatusCodeError {
+            return Response(statusCode: statusError.statusCode, value: statusError.localizedDescription)
+        }
+        
+        return Response(statusCode: 500)
     }
 }

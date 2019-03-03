@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Promises
 import NIO
 
 public protocol ApplicationProtocol {
@@ -17,8 +18,8 @@ public protocol ApplicationDelegate: Decodable {
     func applicationWillStart(application: ApplicationProtocol)
     func applicationDidStart(application: ApplicationProtocol)
     func applicationFailedToStart(application: ApplicationProtocol, error: Error)
-    func applicationStopped(application: ApplicationProtocol)
-    func prepare(completion: (Error?) -> Void)
+    func applicationStopped(application: ApplicationProtocol, error: Error?)
+    func prepare() -> Promise<Void>
     func generateRequestChannel() -> () -> RequestChannel
 }
 
@@ -32,17 +33,22 @@ public extension ApplicationDelegate {
     }
     
     func applicationFailedToStart(application: ApplicationProtocol, error: Error) {
-        print("Application failed:", error.localizedDescription)
+        print("Application failed to start:", error.localizedDescription)
         exit(1)
     }
     
-    func applicationStopped(application: ApplicationProtocol) {
-        print("Application stopped")
-        exit(0)
+    func applicationStopped(application: ApplicationProtocol, error: Error?) {
+        if let error = error {
+            print("Application failed:", error.localizedDescription)
+            exit(1)
+        } else {
+            print("Application stopped")
+            exit(0)
+        }
     }
     
-    func prepare(completion: (Error?) -> Void) {
-        completion(nil)
+    func prepare() -> Promise<Void> {
+        return Promise<Void>(())
     }
 }
 
@@ -57,25 +63,24 @@ public class Application<Delegate: ApplicationDelegate>: ApplicationProtocol {
         delegate = try Delegate(from: environment)
     }
     
-    // TODO: Return a Future?
     public func listen() {
         delegate.applicationWillStart(application: self)
         
         server = Server(configuration: configuration)
         
-        delegate.prepare { (preparationError) in
-            do {
-                if let error = preparationError {
-                    throw error
-                }
-                
-                try server.start(channelInitializer: delegate.generateRequestChannel())
-                delegate.applicationDidStart(application: self)
-                try server.channel.closeFuture.wait()
-                self.delegate.applicationStopped(application: self)
-            } catch {
-                delegate.applicationFailedToStart(application: self, error: error)
-            }
+        do {
+            try await(delegate.prepare())
+            try server.start(channelInitializer: self.delegate.generateRequestChannel())
+            delegate.applicationDidStart(application: self)
+        } catch {
+            self.delegate.applicationFailedToStart(application: self, error: error)
+        }
+        
+        do {
+            try server.channel.closeFuture.wait()
+            delegate.applicationStopped(application: self, error: nil)
+        } catch {
+            delegate.applicationStopped(application: self, error: error)
         }
     }
 }

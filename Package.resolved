@@ -2,6 +2,15 @@
   "object": {
     "pins": [
       {
+        "package": "Promises",
+        "repositoryURL": "https://github.com/google/promises.git",
+        "state": {
+          "branch": null,
+          "revision": "e7512581280477c5dd0e9e637ba5c4e9e2bfe9a3",
+          "version": "1.2.7"
+        }
+      },
+      {
         "package": "swift-nio",
         "repositoryURL": "https://github.com/apple/swift-nio.git",
         "state": {

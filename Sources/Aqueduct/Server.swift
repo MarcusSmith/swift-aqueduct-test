@@ -9,6 +9,7 @@ import Foundation
 
 import Foundation
 import Utility
+import Promises
 import NIO
 import NIOHTTP1
 
@@ -19,7 +20,7 @@ public class Server {
         static let hostUsage: String? = nil
         static let portUsage: String? = nil
         static let channelCountUsage: String? = nil
-        static let defaultHost = "0.0.0.0"
+        static let defaultHost = "localhost"
         static let defaultPort = 8080
         static let defaultChannelCount = System.coreCount
         
@@ -47,7 +48,8 @@ public class Server {
         self.configuration = configuration
     }
     
-    func start(channelInitializer: @escaping () -> RequestChannel) throws {
+    @discardableResult
+    func start(channelInitializer: @escaping () -> RequestChannel) throws -> EventLoopFuture<Void> {
         let group = MultiThreadedEventLoopGroup(numberOfThreads: configuration.channelCount)
         let shutDownGroup = { _ = try? group.syncShutdownGracefully() }
         let bootstrap = ServerBootstrap(group: group)
@@ -56,22 +58,14 @@ public class Server {
             
             .childChannelInitializer { channel in
                 channel.pipeline.configureHTTPServerPipeline(withErrorHandling: true)
-                    .then { (_) -> EventLoopFuture<RequestChannel> in
-                        let requestChannel = channelInitializer()
-                        let promise = channel.eventLoop.newPromise(of: RequestChannel.self)
-                        
-                        requestChannel.prepare { (error) in
-                            if let error = error {
-                                promise.fail(error: error)
-                            } else {
-                                promise.succeed(result: requestChannel)
-                            }
+                    .then { (_) -> EventLoopFuture<Void> in
+                        do {
+                            let requestChannel = channelInitializer()
+                            try await(requestChannel.prepare())
+                            return channel.pipeline.add(handler: RequestHandler(requestChannel: requestChannel))
+                        } catch {
+                            return channel.eventLoop.newFailedFuture(error: error)
                         }
-                        
-                        return promise.futureResult
-                    }
-                    .then { requestChannel in
-                        channel.pipeline.add(handler: RequestHandler(requestChannel: requestChannel))
                     }
             }
             
@@ -82,7 +76,7 @@ public class Server {
         
         do {
             channel = try bootstrap.bind(host: configuration.host, port: configuration.port).wait()
-            _ = channel.closeFuture
+            return channel.closeFuture
                 .map(shutDownGroup)
                 .mapIfError({ _ in shutDownGroup()})
         } catch {
